@@ -1,7 +1,3 @@
-Here's a properly formatted **`README.md`** file that is easy to read and navigate:
-
----
-
 # 🚀 **Startup Project - AI Legal Compliance Review System**
 
 This project is an **AI-powered legal document review system** designed to streamline compliance checks for financial institutions.
