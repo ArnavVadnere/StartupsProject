@@ -1,70 +1,188 @@
-# Getting Started with Create React App
+Here's a properly formatted **`README.md`** file that is easy to read and navigate:
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+---
 
-## Available Scripts
+# 🚀 **Startup Project - AI Legal Compliance Review System**
 
-In the project directory, you can run:
+This project is an **AI-powered legal document review system** designed to streamline compliance checks for financial institutions.
 
-### `npm start`
+It consists of:
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Backend**: A FastAPI server for processing legal documents.
+- **Frontend**: A React-based web interface for users to upload and review documents.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## 📂 **Project Structure**
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```
+STARTUPPROJECT/
+│── backend/               # FastAPI backend
+│   ├── __pycache__/       # Compiled Python files
+│   ├── uploads/           # Directory for uploaded documents
+│   ├── venv/              # Virtual environment (ignored by Git)
+│   ├── main.py            # FastAPI entry point
+│   ├── requirements.txt   # Backend dependencies
+│
+│── frontend/              # React frontend
+│   ├── node_modules/      # Installed dependencies (ignored by Git)
+│   ├── public/            # Static assets
+│   ├── src/               # Main source code
+│   │   ├── components/    # Reusable UI components
+│   │   ├── App.js         # Main application file
+│   │   ├── index.js       # React entry point
+│   │   ├── App.css        # Global styles
+│   │   ├── index.css      # Base styles
+│   ├── package.json       # Frontend dependencies
+│   ├── package-lock.json  # Package lock file
+│
+│── .gitignore             # Ignore unnecessary files (venv, node_modules)
+│── README.md              # Project documentation
+```
 
-### `npm run build`
+---
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## 📥 **Installation Guide**
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 🔹 **Prerequisites**
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Before setting up the project, ensure you have installed:
 
-### `npm run eject`
+- **Python 3.9+** → [Download](https://www.python.org/downloads/)
+- **Node.js 18+** → [Download](https://nodejs.org/)
+- **npm** (Node Package Manager) → [Guide](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+---
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## ⚙️ **Backend Setup (FastAPI)**
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### **1️⃣ Clone the Repository**
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+git clone https://github.com/your-username/startup-project.git
+cd startup-project
+```
 
-## Learn More
+### **2️⃣ Navigate to the Backend**
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```bash
+cd backend
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### **3️⃣ Create a Virtual Environment**
 
-### Code Splitting
+```bash
+python -m venv venv
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### **4️⃣ Activate the Virtual Environment**
 
-### Analyzing the Bundle Size
+- **Windows (CMD/PowerShell):**
+  ```bash
+  venv\Scripts\activate
+  ```
+- **Mac/Linux:**
+  ```bash
+  source venv/bin/activate
+  ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### **5️⃣ Install Dependencies**
 
-### Making a Progressive Web App
+```bash
+pip install -r requirements.txt
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### **6️⃣ Run the Backend**
 
-### Advanced Configuration
+```bash
+uvicorn main:app --reload
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+✅ Your **FastAPI backend** will now be running on:  
+🔗 **`http://127.0.0.1:8000`**
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## 💻 **Frontend Setup (React)**
 
-### `npm run build` fails to minify
+### **1️⃣ Navigate to the Frontend**
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+cd ../frontend
+```
+
+### **2️⃣ Install Dependencies**
+
+```bash
+npm install
+```
+
+### **3️⃣ Start the Frontend**
+
+```bash
+npm start
+```
+
+✅ Your **React app** will now be running on:  
+🔗 **`http://localhost:3000`**
+
+---
+
+## 🚀 **Running the Full Project**
+
+To run **both backend and frontend simultaneously**, open **two terminals**:
+
+### **Terminal 1 (Backend)**
+
+```bash
+cd backend
+source venv/bin/activate   # Windows: venv\Scripts\activate
+uvicorn main:app --reload
+```
+
+### **Terminal 2 (Frontend)**
+
+```bash
+cd frontend
+npm start
+```
+
+---
+
+## 🛠 **Environment Variables**
+
+For security, environment variables should be stored in a `.env` file.
+
+### **Backend (`.env`)**
+
+```ini
+DATABASE_URL=postgresql://user:password@localhost:5432/mydb
+SECRET_KEY=your_secret_key
+```
+
+### **Frontend (`.env`)**
+
+```ini
+REACT_APP_BACKEND_URL=http://localhost:8000
+```
+
+---
+
+## 🔗 **API Endpoints**
+
+| Endpoint   | Method | Description                              |
+| ---------- | ------ | ---------------------------------------- |
+| `/`        | GET    | Root route                               |
+| `/upload`  | POST   | Upload a legal document                  |
+| `/analyze` | POST   | Analyze a document for compliance issues |
+
+---
+
+## 📌 **Best Practices**
+
+✅ **Use Virtual Environments (`venv`)** for Python  
+✅ **Ignore `node_modules/` & `venv/` in Git**  
+✅ **Follow Git Branching Strategy** (`feature-branch` → `main`)  
+✅ **Run `npm install` and `pip install -r requirements.txt` before development**
+
+---
