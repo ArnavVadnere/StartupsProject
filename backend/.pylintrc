@@ -1,0 +1,11 @@
+[MASTER]
+ignore=venv
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,   # Ignore missing docstrings
+    logging-fstring-interpolation,  # Allow f-string logging
+    broad-exception-caught,  # Allow broad exceptions
+    missing-timeout,  # Allow missing timeout warnings
+    wrong-import-order,  # Allow flexible import ordering
+    unused-import  # Ignore unused imports warning
