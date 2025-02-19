@@ -1,0 +1,9 @@
+body {
+  margin: 0;
+  background-color: #f5f5f5;
+}
+
+/* Add smooth transitions for drag state */
+.MuiPaper-root {
+  transition: background-color 0.3s ease;
+}
