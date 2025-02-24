@@ -10,9 +10,11 @@ import {
   ListItemText,
   Paper,
   CircularProgress,
+  Box,
 } from "@mui/material";
 import { CloudUpload, InsertDriveFile } from "@mui/icons-material";
 import axios from "axios";
+import ReactMarkdown from "react-markdown";
 import "react-pdf-highlighter/dist/style.css";
 
 import {
@@ -26,7 +28,7 @@ const DocumentUpload = () => {
   const [files, setFiles] = useState([]);
   const [fileUrl, setFileUrl] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
-  const [analysisResult, setAnalysisResult] = useState([]);
+  const [analysisResult, setAnalysisResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const scrollViewerTo = useRef(() => {});
 
@@ -67,8 +69,9 @@ const DocumentUpload = () => {
         }
       );
 
-      setAnalysisResult(response.data.compliance_issues);
-      setFileUrl(response.data.file_url);
+      setAnalysisResult(response.data);
+      console.log("response from api", response.data);
+      setFileUrl(response.data.file_url || "");
       setUploadMessage(`Analysis complete for: ${response.data.filename}`);
     } catch (error) {
       console.error("Error analyzing file:", error);
@@ -143,8 +146,20 @@ const DocumentUpload = () => {
           </Typography>
         )}
 
+        {/* Display the Analysis Result */}
+        {analysisResult && analysisResult.analysis && (
+          <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
+            <Typography variant="h5" gutterBottom>
+              Compliance Analysis
+            </Typography>
+            <Box mt={2}>
+              <ReactMarkdown>{analysisResult.analysis.content}</ReactMarkdown>
+            </Box>
+          </Paper>
+        )}
+
+        {/* Display PDF Viewer if a fileUrl exists */}
         {fileUrl && (
-          // Outer container with relative positioning
           <div
             style={{
               position: "relative",
@@ -155,7 +170,6 @@ const DocumentUpload = () => {
           >
             <PdfLoader url={fileUrl} beforeLoad={<CircularProgress />}>
               {(pdfDocument) => (
-                // Inner wrapper with absolute positioning
                 <div
                   style={{
                     position: "absolute",
@@ -167,20 +181,8 @@ const DocumentUpload = () => {
                 >
                   <PdfHighlighter
                     pdfDocument={pdfDocument}
-                    highlights={analysisResult.map((issue, i) => ({
-                      id: `highlight-${i}`,
-                      position: {
-                        pageNumber: issue.page,
-                        boundingRect: {
-                          x1: issue.x1,
-                          x0: issue.x0,
-                          y1: issue.y1,
-                          y0: issue.y0,
-                        },
-                        rects: [],
-                      },
-                      content: { text: issue.text },
-                    }))}
+                    // Assuming you may add highlights later
+                    highlights={[]}
                     highlightTransform={(highlight, index, setTip, hideTip) => (
                       <Popup
                         popupContent={<div>{highlight.content.text}</div>}
@@ -196,7 +198,6 @@ const DocumentUpload = () => {
                     )}
                     onSelectionFinished={() => {}}
                     enableAreaSelection={() => false}
-                    // Also pass the style prop here for extra assurance.
                     style={{
                       position: "absolute",
                       top: 0,

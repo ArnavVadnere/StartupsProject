@@ -1,12 +1,21 @@
 import os
 import shutil
-import pdfplumber
 from pathlib import Path
+import pdfplumber
+import logging
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import requests
-import logging
+
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.schema import Document
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_pinecone import PineconeVectorStore
+from langchain.prompts import ChatPromptTemplate
+
+
 
 # ================================
 # FastAPI & Logging Setup
@@ -19,7 +28,7 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # adjust if needed
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,6 +36,15 @@ app.add_middleware(
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+load_dotenv()
+langsmiith_tracing = os.getenv("LANGSMITH_TRACING")
+langsmiith_endpoint = os.getenv("LANGSMITH_ENDPOINT")
+langsmith_api_key = os.getenv("LANGSMITH_API_KEY")
+langsmith_project = os.getenv("LANGSMITH_PROJECT")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+index_name = os.getenv("INDEX_NAME")
 
 # ================================
 # PDF Extraction
@@ -45,6 +63,50 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
     return text
 
 # ================================
+# LangChain Components Setup
+# ================================
+# Initialize text splitter and embeddings
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+embeddings = OpenAIEmbeddings()
+
+# Define the prompt template
+prompt_template = """
+You are a highly skilled financial compliance expert with deep knowledge of SEC regulations for Form 10-K filings. Your task is to review the provided financial document and compare it to relevant SEC compliance rules. 
+
+## 📄 Financial Document Excerpt:
+{document}
+
+## 📜 Relevant SEC Compliance Rules:
+{rules}
+
+### 🔍 **Analysis Tasks:**
+1. **Identify Potential Compliance Concerns**  
+   - Highlight sections that may require further review.  
+   - Explain why these areas could be relevant to SEC guidelines.  
+   - Provide references to similar SEC rules for context.
+
+2. **Provide Best Practices and Industry Standards**  
+   - Share examples of how similar filings structure these sections.  
+   - Recommend general best practices for SEC-compliant disclosures.  
+
+3. **Risk Indicators (Not a Legal Assessment)**  
+   - Indicate whether any sections might attract regulatory scrutiny.  
+   - Provide insights on improving clarity, transparency, or disclosure quality.  
+
+### ⚠️ **Response Format:**
+For each identified area of concern, respond with:
+- **Section Summary:** [Summarized key point from the document]
+- **Potential Concern:** [Explain why this area might require attention]
+- **Best Practices:** [General industry best practice for improving compliance]
+- **Referenced SEC Rule:** [Cite SEC guidelines, but do not interpret them as legal advice]
+
+**Do NOT provide legal conclusions. Instead, focus on comparison, best practices, and informational guidance.**  
+"""
+
+prompt = ChatPromptTemplate.from_template(prompt_template)
+llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+
+# ================================
 # FastAPI Routes
 # ================================
 @app.post("/upload/")
@@ -60,19 +122,44 @@ async def upload_file(file: UploadFile = File(...)):
 @app.post("/analyze/")
 async def analyze_document(file: UploadFile = File(...)):
     """
-    1. Save PDF
-    2. Extract text
-    3. Send text to arbitrary REST API endpoint
+    Endpoint to:
+      1. Save the uploaded PDF
+      2. Extract its text
+      3. Create document chunks and build a Pinecone vector store
+      4. Retrieve relevant SEC rules (via similarity search)
+      5. Invoke the LLM with the prompt to perform compliance analysis
     """
+    # Save the uploaded PDF
     file_path = UPLOAD_DIR / file.filename
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-
+    
     try:
-        text = extract_text_from_pdf(file_path)
-        response = requests.post("http://example.com/api/endpoint", json={"text": text})
-        response.raise_for_status()
-        return response.json()
+        # Extract text from the PDF
+        pdf_text = extract_text_from_pdf(file_path)
+        
+        # Split the text into chunks
+        chunks = text_splitter.split_text(pdf_text)
+        documents = [Document(page_content=text) for text in chunks]
+        
+        # Build the Pinecone vector store and retriever
+        docsearch = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
+        retriever = docsearch.as_retriever()
+        
+        # Retrieve relevant compliance rules (using the same PDF text here for demonstration)
+        retrieved_rules = retriever.get_relevant_documents(pdf_text)
+        
+        # Format the prompt with the document and retrieved rules
+        prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
+        
+        # Invoke the LLM to get the compliance analysis
+        analysis_response = llm.invoke(prompt_text)
+        
+        
+        return {
+            "analysis": analysis_response,
+            "filename": file.filename
+        }
     except Exception as e:
         logger.exception("Analysis failed.")
         return {"error": str(e)}
