@@ -69,8 +69,8 @@ const DocumentUpload = () => {
         }
       );
 
-      setAnalysisResult(response.data);
-      console.log("response from api", response.data);
+      setAnalysisResult(response.data.analysis);
+      console.log("response from api", response);
       setFileUrl(response.data.file_url || "");
       setUploadMessage(`Analysis complete for: ${response.data.filename}`);
     } catch (error) {
