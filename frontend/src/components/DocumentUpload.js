@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useRef } from "react";
+import React, { useCallback, useState, useRef, useEffect} from "react";
 import { useDropzone } from "react-dropzone";
 import {
   Button,
@@ -48,6 +48,14 @@ const DocumentUpload = () => {
     accept: { "application/pdf": [".pdf"] },
   });
 
+  useEffect(() => {
+    if (analysisResult && analysisResult.highlightedPdf) {
+      console.log('analysisResult:', analysisResult);
+      const pdfUrl = URL.createObjectURL(analysisResult.highlightedPdf);
+      setAnalysisResult({...analysisResult, highlightedPdf: pdfUrl});
+    }
+  }, [analysisResult]);
+
   const handleAnalyze = async () => {
     if (files.length === 0) {
       alert("Please select at least one file first.");
@@ -69,7 +77,13 @@ const DocumentUpload = () => {
         }
       );
 
-      setAnalysisResult(response.data);
+      const highlightedPdfUrl = `http://127.0.0.1:8000/uploads/${response.data.highlighted_pdf_path.split('/').pop()}`;
+
+
+
+      setAnalysisResult({...response.data,
+        highlightedPdfUrl: highlightedPdfUrl
+      });
       console.log("response from api", response.data);
       setFileUrl(response.data.file_url || "");
       setUploadMessage(`Analysis complete for: ${response.data.filename}`);
@@ -158,59 +172,21 @@ const DocumentUpload = () => {
           </Paper>
         )}
 
-        {/* Display PDF Viewer if a fileUrl exists */}
-        {fileUrl && (
-          <div
-            style={{
-              position: "relative",
-              height: "80vh",
-              border: "1px solid #ccc",
-              marginTop: 32,
-            }}
-          >
-            <PdfLoader url={fileUrl} beforeLoad={<CircularProgress />}>
-              {(pdfDocument) => (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                  }}
-                >
-                  <PdfHighlighter
-                    pdfDocument={pdfDocument}
-                    // Assuming you may add highlights later
-                    highlights={[]}
-                    highlightTransform={(highlight, index, setTip, hideTip) => (
-                      <Popup
-                        popupContent={<div>{highlight.content.text}</div>}
-                        onMouseOver={setTip}
-                        onMouseOut={hideTip}
-                        key={index}
-                      >
-                        <Highlight
-                          position={highlight.position}
-                          comment={highlight.content.text}
-                        />
-                      </Popup>
-                    )}
-                    onSelectionFinished={() => {}}
-                    enableAreaSelection={() => false}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                    }}
-                  />
-                </div>
-              )}
-            </PdfLoader>
-          </div>
+        {/* Display the Highlighted PDF */}
+        {analysisResult && analysisResult.highlightedPdfUrl && (
+          <Paper elevation={2} style={{ padding: 24, marginTop: 32}}>
+            <Typography variant="h5" gutterBottom>
+              Highlighted PDF
+            </Typography>
+            <embed
+              src={analysisResult.highlightedPdfUrl}
+              type="application/pdf"
+              width="100%"
+              height="500"
+            />
+          </Paper>
         )}
+
       </Paper>
     </Container>
   );
