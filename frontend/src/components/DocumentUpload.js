@@ -16,6 +16,9 @@ import { CloudUpload, InsertDriveFile } from "@mui/icons-material";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import "react-pdf-highlighter/dist/style.css";
+import { supabase } from '../supabaseclient';
+import { AppBar, Toolbar, IconButton } from '@mui/material';
+import { Logout } from '@mui/icons-material';
 
 import {
   PdfLoader,
@@ -47,6 +50,15 @@ const DocumentUpload = () => {
     onDrop,
     accept: { "application/pdf": [".pdf"] },
   });
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.location.href = '/auth';
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (files.length === 0) {
@@ -82,6 +94,18 @@ const DocumentUpload = () => {
   };
 
   return (
+    <>
+    <AppBar position="static">
+      <Toolbar>
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          Legal Document Analyzer
+        </Typography>
+        <IconButton color="inherit" onClick={handleLogout} title="Logout">
+          <Logout />
+        </IconButton>
+      </Toolbar>
+    </AppBar>
+    
     <Container maxWidth="md" style={{ marginTop: 32 }}>
       <Paper elevation={3} style={{ padding: 32 }}>
         <Typography variant="h4" gutterBottom align="center">
@@ -213,6 +237,9 @@ const DocumentUpload = () => {
         )}
       </Paper>
     </Container>
+  </>
+
+    
   );
 };
 
