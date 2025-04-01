@@ -170,7 +170,8 @@ async def analyze_document(file: UploadFile = File(...)):
         
         return {
             "analysis": analysis_response,
-            "filename": file.filename
+            "filename": file.filename,
+            "file_url": file_path,
         }
     except Exception as e:
         logger.exception("Analysis failed.")
