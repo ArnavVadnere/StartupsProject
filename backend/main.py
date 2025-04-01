@@ -48,8 +48,8 @@ langsmith_project = os.getenv("LANGSMITH_PROJECT")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 index_name = os.getenv("INDEX_NAME")
-google_api_key = os.environ["GOOGLE_API_KEY"] = "AIzaSyDYCXJL6Mlq0Bpgc47zVYSNmBYgZdoklOQ"
-google_cloud_project = os.environ["GOOGLE_CLOUD_PROJECT"] = "gen-lang-client-0348162842"
+google_api_key = os.environ["GOOGLE_API_KEY"] 
+google_cloud_project = os.environ["GOOGLE_CLOUD_PROJECT"]
 
 
 # ================================
