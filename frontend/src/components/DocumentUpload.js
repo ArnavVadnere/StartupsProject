@@ -65,27 +65,40 @@ const DocumentUpload = () => {
       alert("Please select at least one file first.");
       return;
     }
-
+  
     setLoading(true);
     setUploadMessage("");
-
+  
+    // Get current user from Supabase
+    const { data: { user }, error } = await supabase.auth.getUser();
+  
+    if (error || !user) {
+      alert("Could not get user info. Please log in again.");
+      setLoading(false);
+      return;
+    }
+  
+    const userId = user.id;
+  
     const formData = new FormData();
     formData.append("file", files[0].file);
-
+  
     try {
       const response = await axios.post(
         "http://127.0.0.1:8000/analyze/",
         formData,
         {
-          headers: { "Content-Type": "multipart/form-data" },
+          headers: {
+            "Content-Type": "multipart/form-data",
+            "x-user-id": userId, // 🔥 pass user ID to backend
+          },
         }
       );
-
+  
       setAnalysisResult(response.data.analysis);
-      console.log("response from api", response.data);
       setFileUrl(response.data.file_url || "");
-      console.log("file_url", response.data.file_url);
       setUploadMessage(`Analysis complete for: ${response.data.filename}`);
+      console.log("response from api", response.data);
     } catch (error) {
       console.error("Error analyzing file:", error);
       setUploadMessage("Error analyzing file.");
@@ -93,6 +106,7 @@ const DocumentUpload = () => {
       setLoading(false);
     }
   };
+  
 
   return (
     <>
