@@ -33,6 +33,7 @@ const DocumentUpload = () => {
   const [uploadMessage, setUploadMessage] = useState("");
   const [analysisResult, setAnalysisResult] = useState(null);
   const [structuredAnalysis, setStructuredAnalysis] = useState([]); // table data
+  const [timeline, setTimeline] = useState([]); // timeline data
   const [loading, setLoading] = useState(false);
   const scrollViewerTo = useRef(() => {});
 
@@ -91,6 +92,8 @@ const DocumentUpload = () => {
 
       setAnalysisResult(response.data.analysis);
       setStructuredAnalysis(response.data.structured_analysis);
+      setTimeline(response.data.timeline);
+      console.log("Timeline", response.data.timeline);
       console.log("response from api", response.data);
       setFileUrl(response.data.file_url || "");
       console.log("file_url", response.data.file_url);
@@ -228,6 +231,34 @@ const DocumentUpload = () => {
                   </tbody>
                 </table>
               </Box>
+            </Paper>
+          )}
+
+          {timeline.length > 0 && (
+            <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
+              <Typography variant="h5" gutterBottom>
+                📈 Change Timeline
+              </Typography>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f0f0f0" }}>
+                    <th style={cellStyle}>Section</th>
+                    <th style={cellStyle}>Previous</th>
+                    <th style={cellStyle}>Current</th>
+                    <th style={cellStyle}>Change Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {timeline.map((row, idx) => (
+                    <tr key={idx}>
+                      <td style={cellStyle}>{row.section}</td>
+                      <td style={cellStyle}>{row.previous_status}</td>
+                      <td style={cellStyle}>{row.current_status}</td>
+                      <td style={cellStyle}>{row.change_summary}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </Paper>
           )}
 
