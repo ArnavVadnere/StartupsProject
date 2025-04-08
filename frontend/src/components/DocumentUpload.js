@@ -11,15 +11,30 @@ import {
   Paper,
   CircularProgress,
   Box,
+  AppBar,
+  Toolbar,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
 } from "@mui/material";
-import { CloudUpload, InsertDriveFile } from "@mui/icons-material";
+import {
+  CloudUpload,
+  InsertDriveFile,
+  Logout,
+  CheckCircle as CheckIcon,
+  Error as ErrorIcon,
+  Cancel as CancelIcon,
+  Info as InfoIcon,
+} from "@mui/icons-material";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import "react-pdf-highlighter/dist/style.css";
 import { supabase } from "../supabaseclient";
-import { AppBar, Toolbar, IconButton } from "@mui/material";
-import { Logout } from "@mui/icons-material";
-
 import {
   PdfLoader,
   PdfHighlighter,
@@ -47,6 +62,28 @@ const DocumentUpload = () => {
       }))
     );
   }, []);
+
+  const renderStatusIcon = (status) => {
+    if (status === "pass")
+      return (
+        <Tooltip title="Pass">
+          <CheckIcon style={{ color: "green" }} />
+        </Tooltip>
+      );
+    if (status === "fail")
+      return (
+        <Tooltip title="Fail">
+          <CancelIcon style={{ color: "red" }} />
+        </Tooltip>
+      );
+    if (status === "partial")
+      return (
+        <Tooltip title="Partial">
+          <ErrorIcon style={{ color: "orange" }} />
+        </Tooltip>
+      );
+    return <InfoIcon />;
+  };
 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
@@ -201,65 +238,83 @@ const DocumentUpload = () => {
 
           {/* Display the Structured Analysis */}
           {structuredAnalysis.length > 0 && (
-            <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
-              <Typography variant="h5" gutterBottom>
+            <TableContainer component={Paper} style={{ marginTop: 32 }}>
+              <Typography variant="h6" style={{ padding: 16 }}>
                 📊 Section-by-Section Compliance Summary
               </Typography>
-              <Box mt={2}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: "#f0f0f0" }}>
-                      <th style={cellStyle}>Section</th>
-                      <th style={cellStyle}>Status</th>
-                      <th style={cellStyle}>Summary</th>
-                      <th style={cellStyle}>Rule</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {structuredAnalysis.map((item, index) => (
-                      <tr key={index}>
-                        <td style={cellStyle}>{item.section}</td>
-                        <td style={cellStyle}>
-                          {item.status === "pass" && "✅ Pass"}
-                          {item.status === "partial" && "⚠️ Partial"}
-                          {item.status === "fail" && "❌ Fail"}
-                        </td>
-                        <td style={cellStyle}>{item.summary}</td>
-                        <td style={cellStyle}>{item.rule}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Box>
-            </Paper>
+              <Table>
+                <TableHead>
+                  <TableRow style={{ backgroundColor: "#f9f9f9" }}>
+                    <TableCell>
+                      <strong>Section</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Status</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Summary</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Rule</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {structuredAnalysis.map((row, idx) => (
+                    <TableRow key={idx} hover>
+                      <TableCell>{row.section}</TableCell>
+                      <TableCell>{renderStatusIcon(row.status)}</TableCell>
+                      <TableCell style={{ maxWidth: 400 }}>
+                        {row.summary}
+                      </TableCell>
+                      <TableCell>{row.rule}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
 
           {timeline.length > 0 && (
-            <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
-              <Typography variant="h5" gutterBottom>
+            <TableContainer component={Paper} style={{ marginTop: 48 }}>
+              <Typography variant="h6" style={{ padding: 16 }}>
                 📈 Change Timeline
               </Typography>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ backgroundColor: "#f0f0f0" }}>
-                    <th style={cellStyle}>Section</th>
-                    <th style={cellStyle}>Previous</th>
-                    <th style={cellStyle}>Current</th>
-                    <th style={cellStyle}>Change Summary</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHead>
+                  <TableRow style={{ backgroundColor: "#f9f9f9" }}>
+                    <TableCell>
+                      <strong>Section</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Previous</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Current</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Change Summary</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {timeline.map((row, idx) => (
-                    <tr key={idx}>
-                      <td style={cellStyle}>{row.section}</td>
-                      <td style={cellStyle}>{row.previous_status}</td>
-                      <td style={cellStyle}>{row.current_status}</td>
-                      <td style={cellStyle}>{row.change_summary}</td>
-                    </tr>
+                    <TableRow key={idx} hover>
+                      <TableCell>{row.section}</TableCell>
+                      <TableCell>
+                        {renderStatusIcon(row.previous_status)}
+                      </TableCell>
+                      <TableCell>
+                        {renderStatusIcon(row.current_status)}
+                      </TableCell>
+                      <TableCell style={{ maxWidth: 500 }}>
+                        {row.change_summary}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </Paper>
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
 
           {/* Display PDF Viewer if a fileUrl exists */}
