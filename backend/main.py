@@ -3,6 +3,8 @@ import shutil
 from pathlib import Path
 import pdfplumber
 import logging
+from typing import List, Dict
+from uuid import uuid4
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, File, UploadFile
@@ -18,6 +20,74 @@ from langchain_google_vertexai import VertexAI
 from langchain_pinecone import PineconeVectorStore
 from langchain.prompts import ChatPromptTemplate
 
+# ================================
+# Agent Class
+# ================================
+
+# In-memory store to track agent instances
+agent_memory_store = {}  # key = doc_id (filename), value = ComplianceAgent instance
+class ComplianceAgent:
+    def __init__(self, doc_id: str):
+        self.doc_id = doc_id
+        self.session_id = str(uuid4())  # Unique session ID for each agent instance
+        self.memory: List[Dict] = []
+        logger.debug(f"Initialized ComplianceAgent with doc_id: {self.doc_id}, session_id: {self.session_id}")
+
+    def analyze(self, document_text: str, retrieved_rules: List[Document]):
+        logger.debug(f"Starting analysis for doc_id: {self.doc_id}, session_id: {self.session_id}")
+
+        # If previous memory exists, include it in prompt
+        previous_analysis = self.memory[-1]["response"] if self.memory else None
+
+        comparison_instruction = ""
+        if previous_analysis:
+            comparison_instruction = (
+                "This is a revised version of a previously analyzed 10-K filing. \n"
+                "Below is the earlier compliance analysis:\n\n"
+                "--- START OF PRIOR ANALYSIS ---\n"
+                f"{previous_analysis}\n"
+                "--- END OF PRIOR ANALYSIS ---\n\n"
+                "Please compare this new version to the prior one. "
+                "Only highlight issues that are still unresolved, or note improvements.\n"
+            )
+
+        # Format rule context separately to avoid f-string expression with backslashes
+        rules_text = "\n".join([doc.page_content for doc in retrieved_rules])
+
+        # Build final prompt text
+        prompt_text = (
+            f"{comparison_instruction}\n"
+            "Now analyze this updated 10-K document for SEC compliance.\n\n"
+            "## 📄 Document:\n"
+            f"{document_text}\n\n"
+            "## 📜 Relevant SEC Compliance Rules:\n"
+            f"{rules_text}\n\n"
+            "Respond with a summary of:\n"
+            "- Remaining compliance issues\n"
+            "- Resolved items\n"
+            "- Improvements since the prior version (if any)\n"
+        )
+
+        # Invoke Gemini LLM
+        result = llm.invoke(prompt_text)
+        logger.debug(f"LLM analysis completed for doc_id: {self.doc_id}, session_id: {self.session_id}")
+
+        # Save result to memory
+        self.memory.append({
+            "document_snippet": document_text[:300],
+            "rules_used": [doc.metadata for doc in retrieved_rules],
+            "response": result,
+        })
+        logger.debug(
+            f"Analysis result stored in memory for doc_id: {self.doc_id}, "
+            f"session_id: {self.session_id}, memory length: {len(self.memory)}"
+        )
+
+        return result
+
+    def get_memory(self):
+        logger.debug(f"Retrieving memory for doc_id: {self.doc_id}, session_id: {self.session_id}")
+        return self.memory
 
 
 # ================================
@@ -161,15 +231,22 @@ async def analyze_document(file: UploadFile = File(...)):
         # Retrieve relevant compliance rules (using the same PDF text here for demonstration)
         retrieved_rules = retriever.get_relevant_documents(pdf_text)
         
-        # Format the prompt with the document and retrieved rules
-        prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
-        
-        # Invoke the LLM to get the compliance analysis
-        analysis_response = llm.invoke(prompt_text)
-        
-        
+        # Get or create agent for this document
+        # TODO: Change doc_id to userId
+        doc_id = file.filename
+        if doc_id not in agent_memory_store:
+            logger.debug(f"Creating new ComplianceAgent for document: {doc_id}")
+            agent_memory_store[doc_id] = ComplianceAgent(doc_id)
+        else:
+            logger.debug(f"Using existing ComplianceAgent for document: {doc_id}")
+
+        agent = agent_memory_store[doc_id]
+        logger.debug(f"Starting analysis for document: {doc_id}")
+        analysis = agent.analyze(pdf_text, retrieved_rules)
+        logger.debug(f"Analysis completed for document: {doc_id}")
+
         return {
-            "analysis": analysis_response,
+            "analysis": analysis,
             "filename": file.filename,
             "file_url": file_path,
         }
