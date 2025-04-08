@@ -6,6 +6,9 @@ import logging
 from typing import List, Dict
 from uuid import uuid4
 from dotenv import load_dotenv
+import json
+import re
+
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,35 +29,31 @@ from langchain.prompts import ChatPromptTemplate
 
 # In-memory store to track agent instances
 agent_memory_store = {}  # key = doc_id (filename), value = ComplianceAgent instance
+from uuid import uuid4
 class ComplianceAgent:
     def __init__(self, doc_id: str):
         self.doc_id = doc_id
-        self.session_id = str(uuid4())  # Unique session ID for each agent instance
+        self.session_id = str(uuid4())
         self.memory: List[Dict] = []
         logger.debug(f"Initialized ComplianceAgent with doc_id: {self.doc_id}, session_id: {self.session_id}")
 
     def analyze(self, document_text: str, retrieved_rules: List[Document]):
         logger.debug(f"Starting analysis for doc_id: {self.doc_id}, session_id: {self.session_id}")
 
-        # If previous memory exists, include it in prompt
+        # Prepare context from memory if available
         previous_analysis = self.memory[-1]["response"] if self.memory else None
-
         comparison_instruction = ""
         if previous_analysis:
             comparison_instruction = (
-                "This is a revised version of a previously analyzed 10-K filing. \n"
+                "This is a revised version of a previously analyzed 10-K filing.\n"
                 "Below is the earlier compliance analysis:\n\n"
                 "--- START OF PRIOR ANALYSIS ---\n"
                 f"{previous_analysis}\n"
                 "--- END OF PRIOR ANALYSIS ---\n\n"
-                "Please compare this new version to the prior one. "
-                "Only highlight issues that are still unresolved, or note improvements.\n"
+                "Please compare this new version to the prior one and identify what is resolved and what still remains an issue.\n"
             )
 
-        # Format rule context separately to avoid f-string expression with backslashes
         rules_text = "\n".join([doc.page_content for doc in retrieved_rules])
-
-        # Build final prompt text
         prompt_text = (
             f"{comparison_instruction}\n"
             "Now analyze this updated 10-K document for SEC compliance.\n\n"
@@ -62,32 +61,28 @@ class ComplianceAgent:
             f"{document_text}\n\n"
             "## 📜 Relevant SEC Compliance Rules:\n"
             f"{rules_text}\n\n"
-            "Respond with a summary of:\n"
+            "Respond with a markdown-formatted summary of:\n"
             "- Remaining compliance issues\n"
             "- Resolved items\n"
             "- Improvements since the prior version (if any)\n"
         )
 
-        # Invoke Gemini LLM
         result = llm.invoke(prompt_text)
         logger.debug(f"LLM analysis completed for doc_id: {self.doc_id}, session_id: {self.session_id}")
 
-        # Save result to memory
         self.memory.append({
             "document_snippet": document_text[:300],
             "rules_used": [doc.metadata for doc in retrieved_rules],
             "response": result,
         })
-        logger.debug(
-            f"Analysis result stored in memory for doc_id: {self.doc_id}, "
-            f"session_id: {self.session_id}, memory length: {len(self.memory)}"
-        )
 
         return result
 
     def get_memory(self):
         logger.debug(f"Retrieving memory for doc_id: {self.doc_id}, session_id: {self.session_id}")
         return self.memory
+
+
 
 
 # ================================
@@ -201,6 +196,10 @@ async def upload_file(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
     return {"filename": file.filename, "message": "File uploaded successfully"}
 
+# Helper to clean up markdown-wrapped JSON
+def strip_markdown_json_fencing(text: str) -> str:
+    return re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
+
 @app.post("/analyze/")
 async def analyze_document(file: UploadFile = File(...)):
     """
@@ -209,30 +208,24 @@ async def analyze_document(file: UploadFile = File(...)):
       2. Extract its text
       3. Create document chunks and build a Pinecone vector store
       4. Retrieve relevant SEC rules (via similarity search)
-      5. Invoke the LLM with the prompt to perform compliance analysis
+      5. Invoke the LLM to perform both markdown-style and structured JSON analysis
     """
-    # Save the uploaded PDF
     file_path = UPLOAD_DIR / file.filename
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     try:
-        # Extract text from the PDF
+        # Extract PDF text
         pdf_text = extract_text_from_pdf(file_path)
-        
-        # Split the text into chunks
+
+        # Split and vectorize
         chunks = text_splitter.split_text(pdf_text)
         documents = [Document(page_content=text) for text in chunks]
-        
-        # Build the Pinecone vector store and retriever
         docsearch = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
         retriever = docsearch.as_retriever()
-        
-        # Retrieve relevant compliance rules (using the same PDF text here for demonstration)
         retrieved_rules = retriever.get_relevant_documents(pdf_text)
-        
-        # Get or create agent for this document
-        # TODO: Change doc_id to userId
+
+        # Use or create ComplianceAgent
         doc_id = file.filename
         if doc_id not in agent_memory_store:
             logger.debug(f"Creating new ComplianceAgent for document: {doc_id}")
@@ -241,15 +234,72 @@ async def analyze_document(file: UploadFile = File(...)):
             logger.debug(f"Using existing ComplianceAgent for document: {doc_id}")
 
         agent = agent_memory_store[doc_id]
-        logger.debug(f"Starting analysis for document: {doc_id}")
-        analysis = agent.analyze(pdf_text, retrieved_rules)
-        logger.debug(f"Analysis completed for document: {doc_id}")
+
+        # === 1. Markdown-style analysis ===
+        markdown_prompt_text = prompt.format(
+            document=pdf_text,
+            rules="\n".join([doc.page_content for doc in retrieved_rules])
+        )
+        markdown_result = llm.invoke(markdown_prompt_text)
+
+        # === 2. Structured JSON summary ===
+        structured_prompt = (
+            "You previously wrote the following compliance analysis of a 10-K document:\n\n"
+            "---\n"
+            f"{markdown_result}\n"
+            "---\n\n"
+            "From this report, extract a list of every 10-K section mentioned.\n"
+            "For each section, output:\n"
+            "- The name of the section (e.g., 'Item 7 - MD&A')\n"
+            "- Its status ('pass', 'partial', or 'fail')\n"
+            "- A short summary of your reasoning\n"
+            "- The SEC rule or regulation referenced\n\n"
+            "Output a JSON list like this:\n\n"
+            "[\n"
+            "  {\n"
+            "    \"section\": \"Item 1 - Business\",\n"
+            "    \"status\": \"partial\",\n"
+            "    \"summary\": \"Business overview is brief and lacks detail.\",\n"
+            "    \"rule\": \"Regulation S-K Item 101\"\n"
+            "  },\n"
+            "  {\n"
+            "    \"section\": \"Item 9A - Controls and Procedures\",\n"
+            "    \"status\": \"fail\",\n"
+            "    \"summary\": \"This section is completely missing.\",\n"
+            "    \"rule\": \"SOX Section 404\"\n"
+            "  }\n"
+            "]\n\n"
+            "Respond ONLY with valid JSON. Do NOT include any markdown, bullet points, or commentary outside the list."
+        )
+
+
+        structured_result_raw = llm.invoke(structured_prompt)
+        logger.debug(f"Structured analysis result: {structured_result_raw}")
+
+        # Remove markdown code block if present
+        cleaned_result = strip_markdown_json_fencing(structured_result_raw)
+
+        try:
+            structured_result = json.loads(cleaned_result)
+        except Exception as e:
+            logger.warning(f"Failed to parse structured analysis JSON: {e}")
+            structured_result = []
+
+        # Save markdown to memory
+        agent.memory.append({
+            "document_snippet": pdf_text[:300],
+            "rules_used": [doc.metadata for doc in retrieved_rules],
+            "response": markdown_result,
+        })
 
         return {
-            "analysis": analysis,
             "filename": file.filename,
             "file_url": file_path,
+            "analysis": markdown_result,
+            "structured_analysis": structured_result,
         }
+
     except Exception as e:
         logger.exception("Analysis failed.")
         return {"error": str(e)}
+

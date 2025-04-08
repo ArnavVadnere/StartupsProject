@@ -32,6 +32,7 @@ const DocumentUpload = () => {
   const [fileUrl, setFileUrl] = useState("");
   const [uploadMessage, setUploadMessage] = useState("");
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [structuredAnalysis, setStructuredAnalysis] = useState([]); // table data
   const [loading, setLoading] = useState(false);
   const scrollViewerTo = useRef(() => {});
 
@@ -60,6 +61,13 @@ const DocumentUpload = () => {
     }
   };
 
+  const cellStyle = {
+    border: "1px solid #ccc",
+    padding: "8px",
+    textAlign: "left",
+    verticalAlign: "top",
+  };
+
   const handleAnalyze = async () => {
     if (files.length === 0) {
       alert("Please select at least one file first.");
@@ -82,6 +90,7 @@ const DocumentUpload = () => {
       );
 
       setAnalysisResult(response.data.analysis);
+      setStructuredAnalysis(response.data.structured_analysis);
       console.log("response from api", response.data);
       setFileUrl(response.data.file_url || "");
       console.log("file_url", response.data.file_url);
@@ -183,6 +192,41 @@ const DocumentUpload = () => {
               </Typography>
               <Box mt={2}>
                 <ReactMarkdown>{analysisResult}</ReactMarkdown>
+              </Box>
+            </Paper>
+          )}
+
+          {/* Display the Structured Analysis */}
+          {structuredAnalysis.length > 0 && (
+            <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
+              <Typography variant="h5" gutterBottom>
+                📊 Section-by-Section Compliance Summary
+              </Typography>
+              <Box mt={2}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#f0f0f0" }}>
+                      <th style={cellStyle}>Section</th>
+                      <th style={cellStyle}>Status</th>
+                      <th style={cellStyle}>Summary</th>
+                      <th style={cellStyle}>Rule</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {structuredAnalysis.map((item, index) => (
+                      <tr key={index}>
+                        <td style={cellStyle}>{item.section}</td>
+                        <td style={cellStyle}>
+                          {item.status === "pass" && "✅ Pass"}
+                          {item.status === "partial" && "⚠️ Partial"}
+                          {item.status === "fail" && "❌ Fail"}
+                        </td>
+                        <td style={cellStyle}>{item.summary}</td>
+                        <td style={cellStyle}>{item.rule}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </Box>
             </Paper>
           )}
