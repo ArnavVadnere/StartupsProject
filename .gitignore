@@ -28,3 +28,4 @@
 # Cache files
 **/.cache/
 **/*.pack
+backend/__pycache__/main.cpython-39.pyc
