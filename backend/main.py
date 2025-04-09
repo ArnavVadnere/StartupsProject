@@ -8,11 +8,13 @@ import re
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, File, UploadFile
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pdfplumber import open as open_pdf
 
+from fastapi import Request
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 # from langchain_openai import OpenAIEmbeddings, ChatOpenAI
@@ -21,6 +23,7 @@ import vertexai
 from langchain_google_vertexai import VertexAI
 from langchain_pinecone import PineconeVectorStore
 from langchain.prompts import ChatPromptTemplate
+from supabase import create_client, Client
 
 
 
@@ -52,8 +55,12 @@ langsmith_project = os.getenv("LANGSMITH_PROJECT")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 index_name = os.getenv("INDEX_NAME")
-google_api_key = os.getenv("GOOGLE_API_KEY")
-google_cloud_project = os.getenv("GOOGLE_CLOUD_PROJECT")
+google_api_key = os.environ["GOOGLE_API_KEY"] 
+google_cloud_project = os.environ["GOOGLE_CLOUD_PROJECT"]
+supabase_url = os.getenv("REACT_APP_SUPABASE_URL")
+supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY") 
+supabase: Client = create_client(supabase_url, supabase_service_key)
+
 
 
 # ================================
@@ -138,7 +145,7 @@ async def upload_file(file: UploadFile = File(...)):
     return {"filename": file.filename, "message": "File uploaded successfully"}
 
 @app.post("/analyze/")
-async def analyze_document(file: UploadFile = File(...)):
+async def analyze_document(request: Request, file: UploadFile = File(...)):
     """
     Endpoint to:
       1. Save the uploaded PDF
@@ -147,43 +154,84 @@ async def analyze_document(file: UploadFile = File(...)):
       4. Retrieve relevant SEC rules (via similarity search)
       5. Invoke the LLM with the prompt to perform compliance analysis
     """
-    # Save the uploaded PDF
-    file_path = UPLOAD_DIR / file.filename
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
+    # get user_id from request
+    user_id = request.headers.get("x-user-id")
+    if not user_id:
+        return {"error": "User ID missing in headers"}
+    storage_path = f"{user_id}/{file.filename}"
     try:
-        # Extract text from the PDF
-        pdf_text = extract_text_from_pdf(file_path)
-        
-        # Split the text into chunks
+        file_bytes = await file.read()
+        upload_response = supabase.storage.from_("legal-docs").upload(
+            storage_path,
+            file_bytes,
+            {"content-type": file.content_type,
+             "x-upsert" : "true"}
+        )
+        if hasattr(upload_response, "error") and upload_response.error:
+            return {"error": f"Supabase upload failed: {upload_response.error['message']}"}
+        signed_url_response = supabase.storage.from_("legal-docs").create_signed_url(
+            storage_path,
+            60 * 60  # 1 hour
+        )
+        if signed_url_response.get("error"):
+            return {"error": "Failed to create signed URL"}
+        signed_url = signed_url_response["signedURL"]
+        with open(f"{UPLOAD_DIR}/{file.filename}", "wb") as temp_file:
+            temp_file.write(file_bytes)
+
+        pdf_text = extract_text_from_pdf(Path(f"{UPLOAD_DIR}/{file.filename}"))
         chunks = text_splitter.split_text(pdf_text)
         documents = [Document(page_content=text) for text in chunks]
-        
-        # Build the Pinecone vector store and retriever
+
         docsearch = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
         retriever = docsearch.as_retriever()
-        
-        # Retrieve relevant compliance rules (using the same PDF text here for demonstration)
         retrieved_rules = retriever.get_relevant_documents(pdf_text)
-        
-        # Format the prompt with the document and retrieved rules
+
+        # 8. Format prompt and run analysis
         prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
-        
-        # Invoke the LLM to get the compliance analysis
         analysis_response = llm.invoke(prompt_text)
 
         print(analysis_response)
-        
+
         direct_quotes = extract_quotes(analysis_response)
         
-        highlighted_path = highlight_sentences_in_pdf(file_path, direct_quotes)
+        highlighted_path = highlight_sentences_in_pdf(f"{UPLOAD_DIR}/{file.filename}", direct_quotes)
         
+        analysis_filename = file.filename.rsplit(".", 1)[0] + "-analysis.txt"
+        analysis_path = f"{user_id}/{analysis_filename}"
+
+        # Convert analysis to bytes
+        analysis_bytes = analysis_response.encode("utf-8")
+        analysis_upload_response = supabase.storage.from_("legal-docs").upload(
+            analysis_path,
+            analysis_bytes,
+            {
+                "content-type": "text/plain",
+                "x-upsert": "true"
+            }
+        )
+
+        if hasattr(analysis_upload_response, "error") and analysis_upload_response.error:
+            return {"error": f"Failed to upload analysis: {analysis_upload_response.error['message']}"}
+
+        signed_analysis_url_response = supabase.storage.from_("legal-docs").create_signed_url(
+            analysis_path,
+            60 * 60
+        )
+
+        if hasattr(signed_analysis_url_response, "error") and signed_analysis_url_response.error:
+            return {"error": "Failed to create signed URL for analysis"}
+
+        analysis_txt_url = signed_analysis_url_response["signedURL"]
+
         return {
             "analysis": analysis_response,
+            "filename": file.filename,
             "highlighted_pdf_path": highlighted_path,
-            "filename": file.filename
+            "file_url": signed_url,
+        "analysis_file_url": analysis_txt_url
         }
+    
     except Exception as e:
         logger.exception("Analysis failed.")
         return {"error": str(e)}
