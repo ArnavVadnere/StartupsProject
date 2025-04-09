@@ -15,7 +15,10 @@ from pdfplumber import open as open_pdf
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import vertexai
+from langchain_google_vertexai import VertexAI
 from langchain_pinecone import PineconeVectorStore
 from langchain.prompts import ChatPromptTemplate
 
@@ -26,7 +29,7 @@ from langchain.prompts import ChatPromptTemplate
 # ================================
 app = FastAPI()
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path("../uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
@@ -49,6 +52,9 @@ langsmith_project = os.getenv("LANGSMITH_PROJECT")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 index_name = os.getenv("INDEX_NAME")
+google_api_key = os.getenv("GOOGLE_API_KEY")
+google_cloud_project = os.getenv("GOOGLE_CLOUD_PROJECT")
+
 
 # ================================
 # PDF Extraction
@@ -71,7 +77,13 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
 # ================================
 # Initialize text splitter and embeddings
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
-embeddings = OpenAIEmbeddings()
+vertexai.init(project='gen-lang-client-0348162842', location='us-central1')
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/embedding-001",
+    project_id="gen-lang-client-0348162842",
+    location="us-central1"
+)
+
 
 # Define the prompt template
 prompt_template = """
@@ -110,7 +122,7 @@ For each identified area of concern, respond with:
 """
 
 prompt = ChatPromptTemplate.from_template(prompt_template)
-llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+llm = VertexAI(model_name="gemini-1.5-flash-002")
 
 # ================================
 # FastAPI Routes
@@ -160,8 +172,10 @@ async def analyze_document(file: UploadFile = File(...)):
         
         # Invoke the LLM to get the compliance analysis
         analysis_response = llm.invoke(prompt_text)
+
+        print(analysis_response)
         
-        direct_quotes = extract_quotes(analysis_response.content)
+        direct_quotes = extract_quotes(analysis_response)
         
         highlighted_path = highlight_sentences_in_pdf(file_path, direct_quotes)
         

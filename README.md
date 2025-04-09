@@ -186,3 +186,81 @@ REACT_APP_BACKEND_URL=http://localhost:8000
 ✅ **Run `npm install` and `pip install -r requirements.txt` before development**
 
 ---
+
+## **🔹 Setting Up Google Gemini API Access**
+
+To integrate **Gemini AI** into your project, follow these steps:
+
+### **1️⃣ Install Google Cloud SDK (`gcloud`) using Homebrew (macOS)**
+
+Run the following command in your **terminal** to install the Google Cloud SDK:
+
+```bash
+brew install --cask google-cloud-sdk
+```
+
+After installation, **restart your terminal** and verify the installation:
+
+```bash
+gcloud --version
+```
+
+---
+
+### **2️⃣ Authenticate with Google Cloud**
+
+Run this command to log in:
+
+```bash
+gcloud auth application-default login
+```
+
+This will open a browser window where you need to authenticate with your **Google Cloud account**.
+
+---
+
+### **3️⃣ Set the Correct Project**
+
+Find your **Google Cloud Project ID**:
+
+```bash
+gcloud projects list
+```
+
+Set the active project using:
+
+```bash
+gcloud config set project YOUR_PROJECT_ID
+```
+
+Replace **`YOUR_PROJECT_ID`** with your actual project ID.
+
+Verify the project was set correctly:
+
+```bash
+gcloud config list
+```
+
+---
+
+### **5️⃣ Get Your Gemini API Key**
+
+1. Go to [Google AI Studio](https://aistudio.google.com/) and **sign in**.
+2. Click on **"Get API Key"**.
+3. Copy the API key.
+
+---
+
+### **6️⃣ Store the API Key in `.env` File**
+
+For security, **never hardcode your API key in the source code**. Instead, add it to your **backend `.env` file**:
+
+#### **Backend (`.env`)**
+
+```ini
+GEMINI_API_KEY=your_google_gemini_api_key
+```
+
+🔹 **Replace** `your_google_gemini_api_key` with the actual **Gemini API Key**.
+
+---

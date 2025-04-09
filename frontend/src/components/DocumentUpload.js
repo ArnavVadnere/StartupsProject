@@ -16,6 +16,9 @@ import { CloudUpload, InsertDriveFile } from "@mui/icons-material";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import "react-pdf-highlighter/dist/style.css";
+import { supabase } from '../supabaseclient';
+import { AppBar, Toolbar, IconButton } from '@mui/material';
+import { Logout } from '@mui/icons-material';
 
 import {
   PdfLoader,
@@ -23,6 +26,8 @@ import {
   Highlight,
   Popup,
 } from "react-pdf-highlighter";
+
+
 
 const DocumentUpload = () => {
   const [files, setFiles] = useState([]);
@@ -51,10 +56,20 @@ const DocumentUpload = () => {
   useEffect(() => {
     if (analysisResult && analysisResult.highlightedPdf) {
       console.log('analysisResult:', analysisResult);
+      console.log(analysisResult.highlightedPdf)
       const pdfUrl = URL.createObjectURL(analysisResult.highlightedPdf);
+      
       setAnalysisResult({...analysisResult, highlightedPdf: pdfUrl});
     }
   }, [analysisResult]);
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.location.href = '/auth';
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   const handleAnalyze = async () => {
     if (files.length === 0) {
@@ -77,15 +92,11 @@ const DocumentUpload = () => {
         }
       );
 
-      const highlightedPdfUrl = `http://127.0.0.1:8000/uploads/${response.data.highlighted_pdf_path.split('/').pop()}`;
-
-
-
-      setAnalysisResult({...response.data,
-        highlightedPdfUrl: highlightedPdfUrl
-      });
-      console.log("response from api", response.data);
-      setFileUrl(response.data.file_url || "");
+      setAnalysisResult(response.data.analysis);
+      console.log("response from api", response);
+      const filePath = `http://127.0.0.1:8000/uploads/${response.data.highlighted_pdf_path.split('/').pop()}`;
+      setFileUrl(filePath);
+      console.log(fileUrl);
       setUploadMessage(`Analysis complete for: ${response.data.filename}`);
     } catch (error) {
       console.error("Error analyzing file:", error);
@@ -95,7 +106,21 @@ const DocumentUpload = () => {
     }
   };
 
+  //console.log(analysisResult.highlightedPdfUrl);
+
   return (
+    <>
+    <AppBar position="static">
+      <Toolbar>
+        <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          Legal Document Analyzer
+        </Typography>
+        <IconButton color="inherit" onClick={handleLogout} title="Logout">
+          <Logout />
+        </IconButton>
+      </Toolbar>
+    </AppBar>
+    
     <Container maxWidth="md" style={{ marginTop: 32 }}>
       <Paper elevation={3} style={{ padding: 32 }}>
         <Typography variant="h4" gutterBottom align="center">
@@ -161,25 +186,25 @@ const DocumentUpload = () => {
         )}
 
         {/* Display the Analysis Result */}
-        {analysisResult && analysisResult.analysis && (
+        {analysisResult && (
           <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
             <Typography variant="h5" gutterBottom>
               Compliance Analysis
             </Typography>
             <Box mt={2}>
-              <ReactMarkdown>{analysisResult.analysis.content}</ReactMarkdown>
+              <ReactMarkdown>{analysisResult}</ReactMarkdown>
             </Box>
           </Paper>
         )}
 
         {/* Display the Highlighted PDF */}
-        {analysisResult && analysisResult.highlightedPdfUrl && (
+        {analysisResult && (
           <Paper elevation={2} style={{ padding: 24, marginTop: 32}}>
             <Typography variant="h5" gutterBottom>
               Highlighted PDF
             </Typography>
             <embed
-              src={analysisResult.highlightedPdfUrl}
+              src={fileUrl}
               type="application/pdf"
               width="100%"
               height="500"
@@ -189,6 +214,9 @@ const DocumentUpload = () => {
 
       </Paper>
     </Container>
+  </>
+
+    
   );
 };
 
