@@ -1,27 +1,33 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependencies
+**/node_modules/
+**/.pnp
+**/.pnp.js
 
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Testing
+**/coverage/
 
-# testing
-/coverage
+# Production
+**/build/
 
-# production
-/build
+# Misc
+**/.DS_Store
+**/.env*
+!**/.env.example
+**/venv/
+**/__pycache__/
+**/*.py[cod]
 
-# misc
-.DS_Store
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-venv/
+# Logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
 
+# Uploads
+**/backend/uploads/
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-/backend/uploads
+# Cache files
+**/.cache/
+**/*.pack
+backend/__pycache__/main.cpython-39.pyc
+uploads/FORM 10-K wrong_highlighted.pdf
+uploads/FORM 10-K wrong.pdf
