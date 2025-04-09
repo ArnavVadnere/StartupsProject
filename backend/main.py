@@ -9,9 +9,10 @@ from dotenv import load_dotenv
 
 from fastapi import FastAPI, File, UploadFile
 
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi import Request
 from pdfplumber import open as open_pdf
 
 from fastapi import Request
