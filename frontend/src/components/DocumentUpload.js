@@ -148,46 +148,6 @@ const DocumentUpload = () => {
     return <span style={style}>{priority}</span>;
   };
 
-  const renderPriority = (priority) => {
-    const style = {
-      borderRadius: "20px",
-      padding: "4px 12px",
-      fontSize: "0.75rem",
-      fontWeight: 600,
-      display: "inline-block",
-      textTransform: "capitalize",
-    };
-
-    if (priority === "high") {
-      return (
-        <span
-          style={{ ...style, backgroundColor: "#fdecea", color: "#d32f2f" }}
-        >
-          High
-        </span>
-      );
-    }
-    if (priority === "medium") {
-      return (
-        <span
-          style={{ ...style, backgroundColor: "#fff4e5", color: "#ed6c02" }}
-        >
-          Medium
-        </span>
-      );
-    }
-    if (priority === "low") {
-      return (
-        <span
-          style={{ ...style, backgroundColor: "#edf7ed", color: "#2e7d32" }}
-        >
-          Low
-        </span>
-      );
-    }
-    return <span style={style}>{priority}</span>;
-  };
-
   const handleAnalyze = async () => {
     if (files.length === 0) {
       alert("Please select at least one file first.");

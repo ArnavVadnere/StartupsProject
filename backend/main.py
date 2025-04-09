@@ -385,7 +385,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
             "filename": file.filename,
             "highlighted_pdf_path": highlighted_path,
             "file_url": signed_url,
-        "analysis_file_url": analysis_txt_url
+            "analysis_file_url": analysis_txt_url,
             "analysis": markdown_result,
             "structured_analysis": structured_result,
             "timeline": timeline,
