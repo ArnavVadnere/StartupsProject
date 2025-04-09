@@ -3,12 +3,18 @@ import shutil
 from pathlib import Path
 import pdfplumber
 import logging
+import fitz
+import re
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, File, UploadFile
 
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from pdfplumber import open as open_pdf
+
 from fastapi import Request
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
@@ -27,7 +33,7 @@ from supabase import create_client, Client
 # ================================
 app = FastAPI()
 
-UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR = Path("../uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
@@ -109,16 +115,18 @@ You are a highly skilled financial compliance expert with deep knowledge of SEC 
 
 3. **Risk Indicators (Not a Legal Assessment)**  
    - Indicate whether any sections might attract regulatory scrutiny.  
-   - Provide insights on improving clarity, transparency, or disclosure quality.  
-
+   - Provide insights on improving clarity, transparency, or disclosure quality.
+   
 ### ⚠️ **Response Format:**
 For each identified area of concern, respond with:
-- **Section Summary:** [Summarized key point from the document]
+- **Direct Quote** [One direct quote from the document that is an area of concern - wrapped in ""]
 - **Potential Concern:** [Explain why this area might require attention]
 - **Best Practices:** [General industry best practice for improving compliance]
 - **Referenced SEC Rule:** [Cite SEC guidelines, but do not interpret them as legal advice]
 
 **Do NOT provide legal conclusions. Instead, focus on comparison, best practices, and informational guidance.**  
+
+**Make sure there are appropriate headers for each task.**
 """
 
 prompt = ChatPromptTemplate.from_template(prompt_template)
@@ -169,10 +177,10 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         if signed_url_response.get("error"):
             return {"error": "Failed to create signed URL"}
         signed_url = signed_url_response["signedURL"]
-        with open("temp.pdf", "wb") as temp_file:
+        with open(f"{UPLOAD_DIR}/{file.filename}", "wb") as temp_file:
             temp_file.write(file_bytes)
 
-        pdf_text = extract_text_from_pdf(Path("temp.pdf"))
+        pdf_text = extract_text_from_pdf(Path(f"{UPLOAD_DIR}/{file.filename}"))
         chunks = text_splitter.split_text(pdf_text)
         documents = [Document(page_content=text) for text in chunks]
 
@@ -183,6 +191,12 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         # 8. Format prompt and run analysis
         prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
         analysis_response = llm.invoke(prompt_text)
+
+        print(analysis_response)
+
+        direct_quotes = extract_quotes(analysis_response)
+        
+        highlighted_path = highlight_sentences_in_pdf(f"{UPLOAD_DIR}/{file.filename}", direct_quotes)
         
         analysis_filename = file.filename.rsplit(".", 1)[0] + "-analysis.txt"
         analysis_path = f"{user_id}/{analysis_filename}"
@@ -214,6 +228,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         return {
             "analysis": analysis_response,
             "filename": file.filename,
+            "highlighted_pdf_path": highlighted_path,
             "file_url": signed_url,
         "analysis_file_url": analysis_txt_url
         }
@@ -222,39 +237,42 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         logger.exception("Analysis failed.")
         return {"error": str(e)}
     
-
-    # # Save the uploaded PDF
-    # file_path = UPLOAD_DIR / file.filename
-    # with file_path.open("wb") as buffer:
-    #     shutil.copyfileobj(file.file, buffer)
+def highlight_sentences_in_pdf(file_path, direct_quotes):
+    # Open the PDF
+    doc = fitz.open(file_path)
     
-    # try:
-    #     # Extract text from the PDF
-    #     pdf_text = extract_text_from_pdf(file_path)
+    # Process each page
+    for page_num in range(len(doc)):
+        page = doc[page_num]
         
-    #     # Split the text into chunks
-    #     chunks = text_splitter.split_text(pdf_text)
-    #     documents = [Document(page_content=text) for text in chunks]
-        
-    #     # Build the Pinecone vector store and retriever
-    #     docsearch = PineconeVectorStore.from_documents(documents, embeddings, index_name=index_name)
-    #     retriever = docsearch.as_retriever()
-        
-    #     # Retrieve relevant compliance rules (using the same PDF text here for demonstration)
-    #     retrieved_rules = retriever.get_relevant_documents(pdf_text)
-        
-    #     # Format the prompt with the document and retrieved rules
-    #     prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
-        
-    #     # Invoke the LLM to get the compliance analysis
-    #     analysis_response = llm.invoke(prompt_text)
-        
-        
-    #     return {
-    #         "analysis": analysis_response,
-    #         "filename": file.filename,
-    #         "file_url": file_path,
-    #     }
-    # except Exception as e:
-    #     logger.exception("Analysis failed.")
-    #     return {"error": str(e)}
+        # Search for each quote and highlight it
+        for quote in direct_quotes:
+
+            if isinstance(quote, tuple):
+                # Use the first element of the tuple
+                quote_text = quote[0]
+            else:
+                quote_text = quote
+
+            # Clean up quote - remove extra whitespace that might affect matching
+            clean_quote = ' '.join(quote_text.split())
+            instances = page.search_for(clean_quote)
+            
+            # Add highlight for each instance found
+            for inst in instances:
+                highlight = page.add_highlight_annot(inst)
+                highlight.update()
+    
+    # Save the highlighted PDF to the uploads directory
+    highlighted_filename = f"{Path(file_path).stem}_highlighted.pdf"
+    highlighted_path = UPLOAD_DIR / highlighted_filename
+    doc.save(str(highlighted_path))
+    doc.close()
+    
+    return highlighted_path
+
+# Assuming analysis_response.content contains the LLM output text
+def extract_quotes(text):
+    # This regex finds text between double quotes, handling escaped quotes
+    pattern = r'"([^"\\]*(\\.[^"\\]*)*)"'
+    return re.findall(pattern, text)

@@ -12,7 +12,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "axios": "^1.8.4",
     "cra-template": "1.2.0",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "^2.16.105",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.5",
