@@ -3,9 +3,14 @@ import shutil
 from pathlib import Path
 import pdfplumber
 import logging
+from typing import List, Dict
+from uuid import uuid4
 import fitz
 import re
 from dotenv import load_dotenv
+import json
+import re
+
 
 from fastapi import FastAPI, File, UploadFile
 
@@ -25,6 +30,101 @@ from langchain_google_vertexai import VertexAI
 from langchain_pinecone import PineconeVectorStore
 from langchain.prompts import ChatPromptTemplate
 from supabase import create_client, Client
+
+# ================================
+# Agent Class
+# ================================
+
+# In-memory store to track agent instances
+agent_memory_store = {}  # key = doc_id (filename), value = ComplianceAgent instance
+class ComplianceAgent:
+    def __init__(self, doc_id: str):
+        self.doc_id = doc_id
+        self.session_id = str(uuid4())
+        self.memory: List[Dict] = []
+        logger.debug(f"Initialized ComplianceAgent with doc_id: {self.doc_id}, session_id: {self.session_id}")
+
+    def build_markdown_prompt(self, document_text: str, retrieved_rules: List[Document]) -> str:
+        previous = self.memory[-1]["markdown"] if self.memory else None
+        comparison_block = (
+            f"This is a revised version of a previously analyzed 10-K.\n\n"
+            f"---\nPrior Analysis:\n{previous}\n---\n\n"
+            "Compare the new version to the prior one. Identify:\n"
+            "- Which items improved or were added\n"
+            "- Which still remain deficient\n"
+            "- Summarize new compliance risks or fixes\n\n"
+            if previous else ""
+        )
+
+        rules_text = "\n".join([doc.page_content for doc in retrieved_rules])
+        return (
+            f"{comparison_block}\n"
+            "## 📄 Updated 10-K Document:\n"
+            f"{document_text}\n\n"
+            "## 📜 Relevant SEC Compliance Rules:\n"
+            f"{rules_text}\n\n"
+            "Return a markdown-formatted compliance analysis with sections for:\n"
+            "1. Section Summary\n2. Potential Concern\n3. Best Practices\n4. Referenced SEC Rule\n"
+        )
+
+    def analyze(self, document_text: str, retrieved_rules: List[Document], markdown_result: str, structured_result: List[Dict]):
+        self.memory.append({
+            "document_snippet": document_text[:300],
+            "rules_used": [doc.metadata for doc in retrieved_rules],
+            "markdown": markdown_result,
+            "structured": structured_result,
+        })
+        logger.debug(f"Analysis saved to memory for doc_id: {self.doc_id}")
+
+    def diff_latest_vs_previous(self) -> List[Dict]:
+        if len(self.memory) < 2:
+            return [
+                {
+                    "section": item["section"],
+                    "previous_status": "N/A",
+                    "current_status": item["status"],
+                    "change_summary": f"🆕 New: {item['status']} — {item['summary']}"
+                }
+                for item in self.memory[-1]["structured"]
+            ]
+
+        prev_structured = self.memory[-2]["structured"]
+        curr_structured = self.memory[-1]["structured"]
+
+        prev_map = {item["section"]: item for item in prev_structured}
+        curr_map = {item["section"]: item for item in curr_structured}
+
+        timeline_rows = []
+
+        for section, curr_item in curr_map.items():
+            prev_item = prev_map.get(section)
+
+            if prev_item:
+                if curr_item["status"] != prev_item["status"]:
+                    change = f"{prev_item['status']} → {curr_item['status']}: {curr_item['summary']}"
+                else:
+                    change = "No change"
+                timeline_rows.append({
+                    "section": section,
+                    "previous_status": prev_item["status"],
+                    "current_status": curr_item["status"],
+                    "change_summary": change,
+                })
+            else:
+                timeline_rows.append({
+                    "section": section,
+                    "previous_status": "N/A",
+                    "current_status": curr_item["status"],
+                    "change_summary": f"🆕 New: {curr_item['status']} — {curr_item['summary']}"
+                })
+
+        return timeline_rows
+
+    def get_memory(self):
+        return self.memory
+
+
+
 
 
 
@@ -130,7 +230,7 @@ For each identified area of concern, respond with:
 """
 
 prompt = ChatPromptTemplate.from_template(prompt_template)
-llm = VertexAI(model_name="gemini-1.5-flash-002")
+llm = VertexAI(model_name="gemini-1.5-flash-002", temperature=0.0)
 
 # ================================
 # FastAPI Routes
@@ -144,6 +244,13 @@ async def upload_file(file: UploadFile = File(...)):
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     return {"filename": file.filename, "message": "File uploaded successfully"}
+
+# Helper to clean up markdown-wrapped JSON
+def strip_markdown_json_fencing(text: str) -> str:
+    return re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
+
+def strip_markdown_json_fencing(text: str) -> str:
+    return re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
 
 @app.post("/analyze/")
 async def analyze_document(request: Request, file: UploadFile = File(...)):
@@ -188,13 +295,52 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         retriever = docsearch.as_retriever()
         retrieved_rules = retriever.get_relevant_documents(pdf_text)
 
-        # 8. Format prompt and run analysis
-        prompt_text = prompt.format(document=pdf_text, rules=retrieved_rules)
-        analysis_response = llm.invoke(prompt_text)
+        doc_id = file.filename
+        if doc_id not in agent_memory_store:
+            logger.debug(f"Creating new ComplianceAgent for document: {doc_id}")
+            agent_memory_store[doc_id] = ComplianceAgent(doc_id)
+        else:
+            logger.debug(f"Using existing ComplianceAgent for document: {doc_id}")
 
-        print(analysis_response)
+        agent = agent_memory_store[doc_id]
 
-        direct_quotes = extract_quotes(analysis_response)
+        # === 1. Markdown-style analysis ===
+        markdown_prompt_text = agent.build_markdown_prompt(pdf_text, retrieved_rules)
+
+        markdown_result = llm.invoke(markdown_prompt_text)
+
+        # === 2. Structured JSON analysis from markdown ===
+        structured_prompt = (
+            "You previously wrote the following compliance analysis of a 10-K document:\n\n"
+            "---\n"
+            f"{markdown_result}\n"
+            "---\n\n"
+            "From that report, extract a structured JSON list of all compliance sections with the following fields:\n"
+            "- section: the name of the section (e.g., 'Item 1A - Risk Factors')\n"
+            "- status: 'pass', 'partial', or 'fail'\n"
+            "- summary: a one-line summary of the issue \n"
+            "- rule: the relevant SEC rule (e.g., 'Regulation S-K')\n"
+            "- priority: 'high', 'medium', or 'low' based on the potential risk to compliance or investors\n\n"
+            "Output JSON like this:\n"
+            "[\n"
+            "  {\n"
+            "    \"section\": \"Item 8 - Financial Statements\",\n"
+            "    \"status\": \"fail\",\n"
+            "    \"summary\": \"Financial statements are missing.\",\n"
+            "    \"rule\": \"Regulation S-X\",\n"
+            "    \"priority\": \"high\"\n"
+            "  }\n"
+            "]\n\n"
+            "Respond ONLY with valid JSON. Do not include code blocks, markdown, or extra commentary."
+        )
+
+        structured_result_raw = llm.invoke(structured_prompt)
+        logger.debug(f"Structured analysis result: {structured_result_raw}")
+        cleaned_result = strip_markdown_json_fencing(structured_result_raw)
+
+        print(markdown_prompt_text)
+
+        direct_quotes = extract_quotes(markdown_prompt_text)
         
         highlighted_path = highlight_sentences_in_pdf(f"{UPLOAD_DIR}/{file.filename}", direct_quotes)
         
@@ -202,7 +348,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
         analysis_path = f"{user_id}/{analysis_filename}"
 
         # Convert analysis to bytes
-        analysis_bytes = analysis_response.encode("utf-8")
+        analysis_bytes = markdown_prompt_text.encode("utf-8")
         analysis_upload_response = supabase.storage.from_("legal-docs").upload(
             analysis_path,
             analysis_bytes,
@@ -225,12 +371,24 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
 
         analysis_txt_url = signed_analysis_url_response["signedURL"]
 
+        try:
+            structured_result = json.loads(cleaned_result)
+        except Exception as e:
+            logger.warning(f"Failed to parse structured analysis JSON: {e}")
+            structured_result = []
+
+        # Store in memory
+        agent.analyze(pdf_text, retrieved_rules, markdown_result, structured_result)
+        timeline = agent.diff_latest_vs_previous()
+
         return {
-            "analysis": analysis_response,
             "filename": file.filename,
             "highlighted_pdf_path": highlighted_path,
             "file_url": signed_url,
         "analysis_file_url": analysis_txt_url
+            "analysis": markdown_result,
+            "structured_analysis": structured_result,
+            "timeline": timeline,
         }
     
     except Exception as e:
