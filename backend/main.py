@@ -216,7 +216,7 @@ For each identified area of concern, respond with:
 """
 
 prompt = ChatPromptTemplate.from_template(prompt_template)
-llm = VertexAI(model_name="gemini-1.5-flash-002")
+llm = VertexAI(model_name="gemini-1.5-flash-002", temperature=0.0)
 
 # ================================
 # FastAPI Routes
