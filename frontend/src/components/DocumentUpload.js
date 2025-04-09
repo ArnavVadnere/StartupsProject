@@ -99,11 +99,44 @@ const DocumentUpload = () => {
     }
   };
 
-  const cellStyle = {
-    border: "1px solid #ccc",
-    padding: "8px",
-    textAlign: "left",
-    verticalAlign: "top",
+  const renderPriority = (priority) => {
+    const style = {
+      borderRadius: "20px",
+      padding: "4px 12px",
+      fontSize: "0.75rem",
+      fontWeight: 600,
+      display: "inline-block",
+      textTransform: "capitalize",
+    };
+
+    if (priority === "high") {
+      return (
+        <span
+          style={{ ...style, backgroundColor: "#fdecea", color: "#d32f2f" }}
+        >
+          High
+        </span>
+      );
+    }
+    if (priority === "medium") {
+      return (
+        <span
+          style={{ ...style, backgroundColor: "#fff4e5", color: "#ed6c02" }}
+        >
+          Medium
+        </span>
+      );
+    }
+    if (priority === "low") {
+      return (
+        <span
+          style={{ ...style, backgroundColor: "#edf7ed", color: "#2e7d32" }}
+        >
+          Low
+        </span>
+      );
+    }
+    return <span style={style}>{priority}</span>;
   };
 
   const handleAnalyze = async () => {
@@ -111,6 +144,13 @@ const DocumentUpload = () => {
       alert("Please select at least one file first.");
       return;
     }
+
+    // Clear all previous information
+    setAnalysisResult(null);
+    setStructuredAnalysis([]);
+    setTimeline([]);
+    setFileUrl("");
+    setUploadMessage("");
 
     setLoading(true);
     setUploadMessage("");
@@ -129,6 +169,7 @@ const DocumentUpload = () => {
 
       setAnalysisResult(response.data.analysis);
       setStructuredAnalysis(response.data.structured_analysis);
+      console.log("Structured Analysis", response.data.structured_analysis);
       setTimeline(response.data.timeline);
       console.log("Timeline", response.data.timeline);
       console.log("response from api", response.data);
@@ -257,6 +298,9 @@ const DocumentUpload = () => {
                     <TableCell>
                       <strong>Rule</strong>
                     </TableCell>
+                    <TableCell>
+                      <strong>Priority</strong>
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -268,6 +312,7 @@ const DocumentUpload = () => {
                         {row.summary}
                       </TableCell>
                       <TableCell>{row.rule}</TableCell>
+                      <TableCell>{renderPriority(row.priority)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
