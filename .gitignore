@@ -29,3 +29,5 @@
 **/.cache/
 **/*.pack
 backend/__pycache__/main.cpython-39.pyc
+uploads/FORM 10-K wrong_highlighted.pdf
+uploads/FORM 10-K wrong.pdf
