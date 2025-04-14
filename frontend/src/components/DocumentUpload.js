@@ -296,7 +296,7 @@ const DocumentUpload = () => {
           )}
 
           {/* Display the Analysis Result */}
-          {analysisResult && (
+          {/* {analysisResult && (
             <Paper elevation={2} style={{ padding: 24, marginTop: 32 }}>
               <Typography variant="h5" gutterBottom>
                 Compliance Analysis
@@ -305,13 +305,13 @@ const DocumentUpload = () => {
                 <ReactMarkdown>{analysisResult}</ReactMarkdown>
               </Box>
             </Paper>
-          )}
+          )} */}
 
           {/* Display the Structured Analysis */}
           {structuredAnalysis.length > 0 && (
             <TableContainer component={Paper} style={{ marginTop: 32 }}>
               <Typography variant="h6" style={{ padding: 16 }}>
-                📊 Section-by-Section Compliance Summary
+                Section-by-Section Compliance Summary
               </Typography>
               <Table>
                 <TableHead>
@@ -353,7 +353,7 @@ const DocumentUpload = () => {
           {timeline.length > 0 && (
             <TableContainer component={Paper} style={{ marginTop: 48 }}>
               <Typography variant="h6" style={{ padding: 16 }}>
-                📈 Change Timeline
+                Change Timeline
               </Typography>
               <Table>
                 <TableHead>

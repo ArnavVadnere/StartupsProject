@@ -264,6 +264,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
     """
     # get user_id from request
     user_id = request.headers.get("x-user-id")
+    print(f"User ID: {user_id}")
     if not user_id:
         return {"error": "User ID missing in headers"}
     storage_path = f"{user_id}/{file.filename}"
