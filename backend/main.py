@@ -249,9 +249,6 @@ async def upload_file(file: UploadFile = File(...)):
 def strip_markdown_json_fencing(text: str) -> str:
     return re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
 
-def strip_markdown_json_fencing(text: str) -> str:
-    return re.sub(r"^```json\s*|\s*```$", "", text.strip(), flags=re.MULTILINE)
-
 @app.post("/analyze/")
 async def analyze_document(request: Request, file: UploadFile = File(...)):
     """
@@ -317,7 +314,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
             f"{markdown_result}\n"
             "---\n\n"
             "From that report, extract a structured JSON list of all compliance sections with the following fields:\n"
-            "- section: the name of the section (e.g., 'Item 1A - Risk Factors')\n"
+            "- section: the name of the section (e.g., 'Item 1A. Risk Factors')\n"
             "- status: 'pass', 'partial', or 'fail'\n"
             "- summary: a one-line summary of the issue \n"
             "- rule: the relevant SEC rule (e.g., 'Regulation S-K')\n"
@@ -325,7 +322,7 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
             "Output JSON like this:\n"
             "[\n"
             "  {\n"
-            "    \"section\": \"Item 8 - Financial Statements\",\n"
+            "    \"section\": \"Item 8. Financial Statements\",\n"
             "    \"status\": \"fail\",\n"
             "    \"summary\": \"Financial statements are missing.\",\n"
             "    \"rule\": \"Regulation S-X\",\n"
@@ -341,7 +338,11 @@ async def analyze_document(request: Request, file: UploadFile = File(...)):
 
         print(markdown_prompt_text)
 
-        direct_quotes = extract_quotes(markdown_prompt_text)
+        print(cleaned_result)
+
+        direct_quotes = extract_quotes(markdown_result)
+
+        print(direct_quotes)
         
         highlighted_path = highlight_sentences_in_pdf(f"{UPLOAD_DIR}/{file.filename}", direct_quotes)
         
@@ -435,3 +436,4 @@ def extract_quotes(text):
     # This regex finds text between double quotes, handling escaped quotes
     pattern = r'"([^"\\]*(\\.[^"\\]*)*)"'
     return re.findall(pattern, text)
+
